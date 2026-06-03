@@ -111,6 +111,7 @@ Each phase reuses the existing roofline + footprint machinery. New work = op han
 
 ## 8. Open decisions / parking lot
 
+- **GQA qk_matmul quirk (found during step 2):** the original analyzer sized the qk_matmul Q-activation load with `num_attention_heads` in decode but `num_key_value_heads` in prefill — physically the Q activation always has attention-heads, so prefill looks like a bug. It only affects GQA models (MHA: nah==nkvh). Currently *preserved* bit-identically via `qk_matmul(..., query_act_heads=...)` (default = attention-heads). **Decision pending:** fix it (drop the legacy override → use attention-heads consistently) and regenerate the GQA golden, or keep as-is. Low urgency; revisit before trusting absolute (vs relative) prefill numbers on GQA VLAs.
 - Concrete first VLA model to seed (OpenVLA vs π0): deferred until after the engine refactor.
 - How to represent sustained-vs-peak compute under the Jetson power cap (roofline ceiling adjustment).
 - Whether vision encoder amortization (encode once, act multiple times) needs explicit modeling for high-Hz control loops.
