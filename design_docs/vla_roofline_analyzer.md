@@ -93,8 +93,8 @@ Each phase reuses the existing roofline + footprint machinery. New work = op han
 
 ## 6. Phased execution plan
 
-1. **Lock current behavior** — golden-CSV tests over existing OPT/Llama/DiT × hardware matrix. *(Safety net.)*  ← in progress; baseline runs
-2. **Refactor `analyze()` → op-handler dispatch**; DAG nodes carry `op_type`. Prove identical numbers vs. golden tests. *(Core enabling refactor.)*
+1. **Lock current behavior** — golden snapshot harness over existing OPT/DiT × hardware matrix (`tests/golden_analyzer.py`). *(Safety net.)*  ✅ DONE
+2. **Refactor `analyze()` → op-handler dispatch** (`op_handlers.py`: registry of op-type cost handlers; `analyze()` is now a dispatcher). Proven bit-identical vs. golden (7/7 cases PASS). *(Core enabling refactor.)*  ✅ DONE
 3. **Add edge hardware** + `memory_capacity`/`FP8`/`INT4` fields.
 4. **Vision encoder + multi-phase orchestration**; add a `VLA` config module pattern.
 5. **New op handlers:** linear attention, diffusion/flow action head; expose chunk-size/steps/Hz as CLI + UI params.

@@ -11,8 +11,12 @@ The purpose is to lock the *current* analyzer numbers before refactoring
 to produce identical results.
 
 Cases are restricted to models that load without gated HF access:
-  * facebook/opt-125m  (huggingface source)
-  * DiT-S/2            (local model_params source, no network)
+  * facebook/opt-125m                     (huggingface source, MHA)
+  * TinyLlama/TinyLlama-1.1B-Chat-v1.0    (huggingface source, GQA: 32 vs 4 heads)
+  * DiT-S/2                               (local model_params source, no network)
+
+The TinyLlama (GQA) cases matter because attention cost has a head-count path
+that differs between MHA and GQA; the MHA-only models can't exercise it.
 """
 
 import argparse
@@ -85,6 +89,31 @@ CASES = [
         "source": "huggingface",
         "kind": "generate",
         "params": {"prompt_len": 128, "gen_len": 64, "batchsize": 1},
+    },
+    # --- TinyLlama (huggingface source, GQA) -------------------------------
+    {
+        "name": "tinyllama/A6000/b1_s1024_fp16",
+        "model_id": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        "hardware": "nvidia_A6000",
+        "source": "huggingface",
+        "kind": "analyze",
+        "params": {"seqlen": 1024, "batchsize": 1},
+    },
+    {
+        "name": "tinyllama/A6000/b1_s1024_fp16_flash",
+        "model_id": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        "hardware": "nvidia_A6000",
+        "source": "huggingface",
+        "kind": "analyze",
+        "params": {"seqlen": 1024, "batchsize": 1, "use_flashattention": True},
+    },
+    {
+        "name": "tinyllama/A6000/b1_s512_w8a8kv8",
+        "model_id": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        "hardware": "nvidia_A6000",
+        "source": "huggingface",
+        "kind": "analyze",
+        "params": {"seqlen": 512, "batchsize": 1, "w_bit": 8, "a_bit": 8, "kv_bit": 8},
     },
     # --- DiT-S/2 (local model_params source) -------------------------------
     {
