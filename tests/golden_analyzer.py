@@ -1,0 +1,215 @@
+"""Golden-output regression harness for ModelAnalyzer.
+
+Runs ModelAnalyzer over a fixed matrix of (model, hardware, config) cases,
+flattens every numeric / string output, and either:
+
+  * writes the golden snapshot          --> `python tests/golden_analyzer.py --update`
+  * compares against the saved snapshot  --> `python tests/golden_analyzer.py`
+
+The purpose is to lock the *current* analyzer numbers before refactoring
+`ModelAnalyzer.analyze()` into op-type handlers, so the refactor can be proven
+to produce identical results.
+
+Cases are restricted to models that load without gated HF access:
+  * facebook/opt-125m  (huggingface source)
+  * DiT-S/2            (local model_params source, no network)
+"""
+
+import argparse
+import json
+import math
+import os
+import sys
+
+# allow running from anywhere: make repo root importable
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
+
+from model_analyzer import ModelAnalyzer  # noqa: E402
+
+GOLDEN_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden_analyzer.json")
+
+# Default numeric comparison tolerance. A faithful refactor should reproduce
+# results to well within this; it only absorbs last-bit float reassociation.
+DEFAULT_RTOL = 1e-9
+DEFAULT_ATOL = 0.0
+
+
+# Each case fully specifies one analyzer run. `kind` selects the entry point.
+CASES = [
+    # --- opt-125m (huggingface source) -------------------------------------
+    {
+        "name": "opt125m/A6000/b1_s1024_fp16",
+        "model_id": "facebook/opt-125m",
+        "hardware": "nvidia_A6000",
+        "source": "huggingface",
+        "kind": "analyze",
+        "params": {"seqlen": 1024, "batchsize": 1},
+    },
+    {
+        "name": "opt125m/A6000/b1_s1024_fp16_flash",
+        "model_id": "facebook/opt-125m",
+        "hardware": "nvidia_A6000",
+        "source": "huggingface",
+        "kind": "analyze",
+        "params": {"seqlen": 1024, "batchsize": 1, "use_flashattention": True},
+    },
+    {
+        "name": "opt125m/A6000/b16_s2048_fp16",
+        "model_id": "facebook/opt-125m",
+        "hardware": "nvidia_A6000",
+        "source": "huggingface",
+        "kind": "analyze",
+        "params": {"seqlen": 2048, "batchsize": 16},
+    },
+    {
+        "name": "opt125m/A6000/b1_s1024_w8a8kv8",
+        "model_id": "facebook/opt-125m",
+        "hardware": "nvidia_A6000",
+        "source": "huggingface",
+        "kind": "analyze",
+        "params": {"seqlen": 1024, "batchsize": 1, "w_bit": 8, "a_bit": 8, "kv_bit": 8},
+    },
+    {
+        "name": "opt125m/H100/b1_s2048_fp16",
+        "model_id": "facebook/opt-125m",
+        "hardware": "nvidia_H100",
+        "source": "huggingface",
+        "kind": "analyze",
+        "params": {"seqlen": 2048, "batchsize": 1},
+    },
+    {
+        "name": "opt125m/A6000/generate_p128_g64",
+        "model_id": "facebook/opt-125m",
+        "hardware": "nvidia_A6000",
+        "source": "huggingface",
+        "kind": "generate",
+        "params": {"prompt_len": 128, "gen_len": 64, "batchsize": 1},
+    },
+    # --- DiT-S/2 (local model_params source) -------------------------------
+    {
+        "name": "DiT-S2/A6000/b1_s256_fp16",
+        "model_id": "DiT-S/2",
+        "hardware": "nvidia_A6000",
+        "source": "DiT",
+        "kind": "analyze",
+        "params": {"seqlen": 256, "batchsize": 1},
+    },
+]
+
+
+def flatten(obj, prefix=""):
+    """Flatten a nested dict into {path: leaf} for numeric/string/bool leaves."""
+    out = {}
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            out.update(flatten(v, f"{prefix}/{k}" if prefix else str(k)))
+    elif isinstance(obj, (int, float, str, bool)) or obj is None:
+        out[prefix] = obj
+    else:
+        # unexpected type -> stringify so a change is at least visible
+        out[prefix] = f"<{type(obj).__name__}>{obj!r}"
+    return out
+
+
+def run_case(case):
+    analyzer = ModelAnalyzer(
+        case["model_id"], case["hardware"], None, source=case["source"]
+    )
+    if case["kind"] == "analyze":
+        result = analyzer.analyze(**case["params"])
+    elif case["kind"] == "generate":
+        result = analyzer.analyze_generate_task(**case["params"])
+    else:
+        raise ValueError(f"unknown kind {case['kind']}")
+    return flatten(result)
+
+
+def numbers_match(a, b, rtol, atol):
+    if isinstance(a, bool) or isinstance(b, bool):
+        return a == b
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        if math.isnan(a) and math.isnan(b):
+            return True
+        if math.isinf(a) or math.isinf(b):
+            return a == b
+        return abs(a - b) <= atol + rtol * abs(b)
+    return a == b
+
+
+def compare(golden, current, rtol, atol):
+    """Return list of (key, golden_value, current_value) mismatches."""
+    mismatches = []
+    keys = sorted(set(golden) | set(current))
+    for k in keys:
+        if k not in golden:
+            mismatches.append((k, "<MISSING>", current[k]))
+        elif k not in current:
+            mismatches.append((k, golden[k], "<MISSING>"))
+        elif not numbers_match(golden[k], current[k], rtol, atol):
+            mismatches.append((k, golden[k], current[k]))
+    return mismatches
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--update", action="store_true", help="write the golden snapshot instead of comparing")
+    parser.add_argument("--rtol", type=float, default=DEFAULT_RTOL)
+    parser.add_argument("--atol", type=float, default=DEFAULT_ATOL)
+    parser.add_argument("--verbose", action="store_true", help="show every mismatch (default caps at 20 per case)")
+    args = parser.parse_args()
+
+    current = {}
+    for case in CASES:
+        print(f"[run] {case['name']}", flush=True)
+        current[case["name"]] = run_case(case)
+
+    if args.update:
+        with open(GOLDEN_PATH, "w") as f:
+            json.dump(current, f, indent=2, sort_keys=True)
+        n_vals = sum(len(v) for v in current.values())
+        print(f"\nWrote golden snapshot: {GOLDEN_PATH}")
+        print(f"  {len(current)} cases, {n_vals} values")
+        return 0
+
+    if not os.path.exists(GOLDEN_PATH):
+        print(f"\nERROR: golden snapshot not found at {GOLDEN_PATH}. Run with --update first.")
+        return 2
+
+    with open(GOLDEN_PATH) as f:
+        golden = json.load(f)
+
+    total_mismatches = 0
+    failed_cases = 0
+    for name in sorted(set(golden) | set(current)):
+        if name not in golden:
+            print(f"[NEW CASE] {name} (not in golden — run --update)")
+            failed_cases += 1
+            continue
+        if name not in current:
+            print(f"[MISSING CASE] {name} (in golden but not produced)")
+            failed_cases += 1
+            continue
+        mismatches = compare(golden[name], current[name], args.rtol, args.atol)
+        if mismatches:
+            failed_cases += 1
+            total_mismatches += len(mismatches)
+            print(f"[FAIL] {name}: {len(mismatches)} mismatch(es)")
+            shown = mismatches if args.verbose else mismatches[:20]
+            for key, g, c in shown:
+                print(f"    {key}: golden={g!r} current={c!r}")
+            if not args.verbose and len(mismatches) > len(shown):
+                print(f"    ... ({len(mismatches) - len(shown)} more; use --verbose)")
+        else:
+            print(f"[PASS] {name}")
+
+    print()
+    if failed_cases:
+        print(f"RESULT: FAIL — {failed_cases} case(s), {total_mismatches} value mismatch(es)")
+        return 1
+    print(f"RESULT: PASS — all {len(current)} cases match golden")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
