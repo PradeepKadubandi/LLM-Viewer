@@ -331,12 +331,19 @@ class ModelAnalyzer:
         return {"inference_time": inference_time, "prefill_time": prefill_time}
 
     def get_hardware_info(self):
-        bandwidth = hardware_params[self.hardware]["bandwidth"]
-        if self.w_bit <= 8 and self.a_bit <= 8 and self.kv_bit <= 8:
-            max_OPS = hardware_params[self.hardware]["INT8"]
+        params = hardware_params[self.hardware]
+        bandwidth = params["bandwidth"]
+        # Pick the peak-throughput tier for the lowest common bitwidth the
+        # hardware actually supports, falling back up the precision ladder when
+        # a tier is absent (e.g. Hopper has no INT4; intel has only FP16).
+        max_bit = max(self.w_bit, self.a_bit, self.kv_bit)
+        if max_bit <= 4 and "INT4" in params:
+            max_OPS = params["INT4"]
+        elif max_bit <= 8 and "INT8" in params:
+            max_OPS = params["INT8"]
         else:
-            max_OPS = hardware_params[self.hardware]["FP16"]
-        onchip_buffer = hardware_params[self.hardware]["onchip_buffer"]
+            max_OPS = params["FP16"]
+        onchip_buffer = params["onchip_buffer"]
         return bandwidth, max_OPS, onchip_buffer
 
     def get_model_info(self):

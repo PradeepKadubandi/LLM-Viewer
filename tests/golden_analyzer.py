@@ -115,6 +115,23 @@ CASES = [
         "kind": "analyze",
         "params": {"seqlen": 512, "batchsize": 1, "w_bit": 8, "a_bit": 8, "kv_bit": 8},
     },
+    # --- Edge hardware (Jetson) + INT4 path --------------------------------
+    {
+        "name": "opt125m/orin_nx/b1_s1024_w4a4kv4",  # exercises INT4 throughput tier
+        "model_id": "facebook/opt-125m",
+        "hardware": "jetson_orin_nx_16gb",
+        "source": "huggingface",
+        "kind": "analyze",
+        "params": {"seqlen": 1024, "batchsize": 1, "w_bit": 4, "a_bit": 4, "kv_bit": 4},
+    },
+    {
+        "name": "tinyllama/orin_nx/b1_s2048_fp16",
+        "model_id": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        "hardware": "jetson_orin_nx_16gb",
+        "source": "huggingface",
+        "kind": "analyze",
+        "params": {"seqlen": 2048, "batchsize": 1},
+    },
     # --- DiT-S/2 (local model_params source) -------------------------------
     {
         "name": "DiT-S2/A6000/b1_s256_fp16",

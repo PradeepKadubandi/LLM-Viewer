@@ -95,7 +95,7 @@ Each phase reuses the existing roofline + footprint machinery. New work = op han
 
 1. **Lock current behavior** — golden snapshot harness over existing OPT/DiT × hardware matrix (`tests/golden_analyzer.py`). *(Safety net.)*  ✅ DONE
 2. **Refactor `analyze()` → op-handler dispatch** (`op_handlers.py`: registry of op-type cost handlers; `analyze()` is now a dispatcher). Proven bit-identical vs. golden (7/7 cases PASS). *(Core enabling refactor.)*  ✅ DONE
-3. **Add edge hardware** + `memory_capacity`/`FP8`/`INT4` fields.
+3. **Add edge hardware** + `memory_capacity`/`INT4` fields. Added Jetson Orin NX 16GB / AGX Orin 64GB / AGX Thor (`hardwares/hardware_params.py`), `memory_capacity` on every entry, `INT4` peak where supported, and INT4 throughput selection in `get_hardware_info`. (FP8 deferred to the dtype-aware quant step — bitwidth alone can't distinguish FP8 from INT8.) Golden: 12/12 PASS (added Orin-NX w4a4kv4 + GQA cases). ✅ DONE
 4. **Vision encoder + multi-phase orchestration**; add a `VLA` config module pattern.
 5. **New op handlers:** linear attention, diffusion/flow action head; expose chunk-size/steps/Hz as CLI + UI params.
 6. **Surface in frontend:** new controls + "latency vs control budget / memory-fit" readout.
