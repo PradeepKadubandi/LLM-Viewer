@@ -10,7 +10,7 @@ LLM-Viewer is a tool for visualizing Language Models (LLMs) and analyzing their 
 
 ## VLA Viewer (Vision-Language-Action, edge robotics)
 
-![VLA Viewer](figs/vla_viewer.png)
+![VLA Viewer](figs/vla_quant_demo.gif)
 
 The VLA Viewer models one observe→act inference step as a pipeline of phases —
 **patch embed → vision encode → projector → LLM prefill → action generation** —

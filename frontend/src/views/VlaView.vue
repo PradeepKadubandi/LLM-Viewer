@@ -21,7 +21,7 @@ let rooflineChart = null
 const cfg = reactive({
   vla_model: 'tinyvla_demo',
   hardware: 'jetson_orin_nx_16gb',
-  w_quant: '4-bit', a_quant: '8-bit', kv_quant: '8-bit',
+  w_quant: '8-bit', a_quant: '8-bit', kv_quant: '8-bit',
   num_text_tokens: 256, num_images: 1, batch_size: 1, use_flashattention: false,
   control_hz: 10, exec_horizon: 10,   // exec_horizon 0 = execute the full chunk open-loop
   // architecture choices (override the preset's defaults)
