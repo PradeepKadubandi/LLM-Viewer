@@ -246,8 +246,15 @@ def analyze_vla(
         steps = 1 if head == "parallel" else vla_cfg.num_flow_steps
         dims = vla_cfg.action_expert or DEFAULT_ACTION_EXPERT
         chunk = vla_cfg.action_chunk
+        # The expert's action queries (chunk) cross-attend to the cached VLM
+        # prefix KV AND self-attend over the chunk -> attention kv length is
+        # prefix_len + chunk. The expert only projects its own action tokens
+        # (q_seqlen = chunk); the prefix K/V come from the VLM prefill (read from
+        # cache, not re-projected here). Approximation: prefix KV is costed in
+        # the expert's head space, not the (larger) VLM head space.
+        expert_kv_len = prefix_len + chunk
         per_t, per_ops, expert_weight, per_mem = _transformer_forward(
-            dims, dims["layers"], chunk, chunk, batchsize, a_byte, w_byte, kv_byte,
+            dims, dims["layers"], chunk, expert_kv_len, batchsize, a_byte, w_byte, kv_byte,
             bandwidth, max_OPS, use_flashattention=use_flashattention,
             gated_mlp=True, attention_type=vla_cfg.expert_attention,
         )
