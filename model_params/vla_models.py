@@ -24,11 +24,14 @@ VLA_MODELS = {
         llm_model_id="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
         action_head="ar", action_horizon=1, tokens_per_action=7,
     ),
-    # OpenVLA scale: DINOv2-L vision + Llama-2-7B backbone (gated -> needs auth).
+    # OpenVLA scale: DINOv2-L vision + Llama-2-7B backbone. Uses the ungated
+    # NousResearch mirror (identical config to meta-llama/Llama-2-7b-hf, which is
+    # gated and requires per-account Meta approval) so it runs without HF access
+    # grants. The roofline numbers are the same -- only the config dims matter.
     "openvla_7b": VLAConfig(
         name="openvla_7b",
         vision_model_id="dinov2_vit_large_p14_518",
-        llm_model_id="meta-llama/Llama-2-7b-hf",
+        llm_model_id="NousResearch/Llama-2-7b-hf",
         action_head="ar", action_horizon=1, tokens_per_action=7,
     ),
     # --- Flow / diffusion (pi0 / Octo-style) ------------------------------

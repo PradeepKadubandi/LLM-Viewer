@@ -85,9 +85,8 @@ function fetchGraph() {
     })
     .catch((e) => {
       loading.value = false
-      errorMsg.value = (e.response && e.response.status === 500)
-        ? 'Backend error analyzing this model (gated weights need HF auth?).'
-        : 'Request failed: ' + e.message
+      const be = e.response && e.response.data && e.response.data.error
+      errorMsg.value = be ? ('Backend: ' + be) : ('Request failed: ' + e.message)
     })
 }
 

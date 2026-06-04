@@ -42,11 +42,16 @@ def get_avaliable():
 
 @app.route("/get_vla_graph", methods=["POST"])
 def get_vla_graph_route():
-    return get_vla_graph(
-        request.json["vla_model"],
-        request.json["hardware"],
-        request.json["vla_config"],
-    )
+    try:
+        return get_vla_graph(
+            request.json["vla_model"],
+            request.json["hardware"],
+            request.json["vla_config"],
+        )
+    except Exception as e:
+        # Surface a readable reason (gated/unapproved repo, missing config, etc.)
+        # to the dashboard instead of an opaque 500.
+        return {"error": f"{type(e).__name__}: {e}"}, 400
 
 
 @app.route("/get_vla_avaliable", methods=["GET"])
