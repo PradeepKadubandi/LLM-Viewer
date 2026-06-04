@@ -174,6 +174,13 @@ CASES = [
         "overrides": {"action_head": "flow", "expert_attention": "linear"},
         "params": {"num_text_tokens": 16, "batchsize": 1, "w_bit": 4, "a_bit": 8, "kv_bit": 8},
     },
+    {
+        "name": "vla/pi0_like/agx_orin/w8a8kv8",  # PaliGemma (Gemma-2B) + flow expert, local params
+        "model_id": "pi0_like",
+        "hardware": "jetson_agx_orin_64gb",
+        "kind": "vla",
+        "params": {"num_text_tokens": 16, "batchsize": 1, "w_bit": 8, "a_bit": 8, "kv_bit": 8},
+    },
     # --- DiT-S/2 (local model_params source) -------------------------------
     {
         "name": "DiT-S2/A6000/b1_s256_fp16",

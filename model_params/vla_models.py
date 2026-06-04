@@ -41,11 +41,18 @@ VLA_MODELS = {
     # the preset's default; switch the action head via vla_config instead of
     # picking a different model. (tinyvla_demo above defaults to AR; override it
     # with action_head="flow" for the flow/diffusion path on the same backbone.)
-    # pi0 scale: SigLIP vision + PaliGemma backbone (gated) + ~300M flow expert.
+    # pi0: PaliGemma VLM (SigLIP-So400m vision + Gemma-2B language) + a ~300M
+    # flow-matching action expert over a 50-action chunk. The Gemma-2B backbone
+    # is a local param (model_params/llm_backbones.py) analyzed with the Llama
+    # config -- avoids PaliGemma's gating and its composite HF config.
     "pi0_like": VLAConfig(
         name="pi0_like",
-        vision_model_id="siglip_vit_large_p16_384",
-        llm_model_id="google/paligemma-3b-pt-224",
+        vision_model_id="siglip_so400m_p14_224",
+        llm_model_id="gemma_2b",
+        llm_source="llm_backbones",
+        llm_config_file="configs/Llama.py",
         action_head="flow", num_flow_steps=10, action_chunk=50,
+        # pi0's action expert is a smaller Gemma (~300M, MQA).
+        action_expert={"hidden": 1024, "heads": 8, "kv_heads": 1, "layers": 18, "intermediate": 4096},
     ),
 }

@@ -45,4 +45,16 @@ model_params = {
         num_channels=3,
         has_cls_token=False,
     ),
+    # SigLIP-So400m/14, 224px -- PaliGemma's vision tower (pi0). 16x16 = 256
+    # patch tokens, no CLS token.
+    "siglip_so400m_p14_224": EasyDict(
+        hidden_size=1152,
+        num_attention_heads=16,
+        num_hidden_layers=27,
+        intermediate_size=4304,
+        image_size=224,
+        patch_size=14,
+        num_channels=3,
+        has_cls_token=False,
+    ),
 }
