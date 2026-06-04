@@ -94,6 +94,8 @@ def get_vla_graph(vla_model_id, hardware, vla_config):
 
     control_hz = vla_config.get("control_hz")
     if control_hz not in (None, ""):
-        payload["control"] = control_budget(cfg, total, float(control_hz))
+        eh = vla_config.get("exec_horizon")
+        eh = int(eh) if eh not in (None, "") else None
+        payload["control"] = control_budget(cfg, total, float(control_hz), exec_horizon=eh)
 
     return payload

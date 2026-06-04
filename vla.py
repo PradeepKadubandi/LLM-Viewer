@@ -62,36 +62,47 @@ def _phase(time, OPs, weight=0.0, **extra):
     return d
 
 
-def execution_horizon(cfg):
-    """Actions produced per inference (executed open-loop before the next one).
+def chunk_horizon(cfg):
+    """Actions PREDICTED per inference -- the chunk length that drives compute.
 
-    Action chunking amortizes inference over multiple control steps: one forward
-    pass emits a chunk of H actions that the controller plays out open-loop, so
-    inference only needs to keep up at 1 every H control periods. H is the
-    action horizon for AR heads, or the action-chunk length for flow/parallel.
+    One forward pass emits this many actions (action_horizon for AR heads, the
+    action-chunk length for flow/parallel). How many are actually executed
+    before replanning is a separate deployment choice (see control_budget's
+    exec_horizon).
     """
     return cfg.action_horizon if cfg.action_head == "ar" else cfg.action_chunk
 
 
-def control_budget(cfg, total_time, control_hz):
-    """Deployment verdict under action chunking.
+def control_budget(cfg, total_time, control_hz, exec_horizon=None):
+    """Deployment verdict under action chunking + receding-horizon replanning.
 
-    Budget = horizon / control_hz (H control periods of runway), NOT a single
-    1/control_hz period -- a pipeline slower than one control step can still be
-    real-time if it produces enough actions per inference. Assumes the full
-    chunk is executed open-loop (replan interval == chunk length); a shorter
-    receding-horizon replan would scale the budget down proportionally.
+    The policy predicts `chunk_horizon` actions per inference (that's what costs
+    compute / latency). Of those, `exec_horizon` are played out open-loop before
+    the next inference; the rest are discarded (receding horizon). Inference must
+    keep up at 1 per exec_horizon control periods, so:
+
+        budget = exec_horizon / control_hz
+
+    A pipeline slower than one control step is still real-time as long as it
+    commits enough actions per inference. exec_horizon defaults to the full chunk
+    (pure open-loop) and is capped at chunk_horizon (can't execute more than was
+    predicted). Assumes inference overlaps execution of the previous chunk.
     """
-    h = execution_horizon(cfg)
+    ch = chunk_horizon(cfg)
+    if exec_horizon in (None, 0, ""):
+        eh = ch
+    else:
+        eh = max(1, min(int(exec_horizon), ch))
     period = 1.0 / control_hz
-    budget = h * period
+    budget = eh * period
     return {
         "hz": control_hz,
-        "horizon": h,
+        "chunk_horizon": ch,     # predicted (drives latency)
+        "exec_horizon": eh,      # executed open-loop (drives the budget)
         "period": period,
         "budget": budget,
         "ok": total_time <= budget,
-        "achievable_hz": (h / total_time) if total_time else 0.0,  # open-loop control rate sustained
+        "achievable_hz": (eh / total_time) if total_time else 0.0,
     }
 
 

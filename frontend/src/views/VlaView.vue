@@ -23,7 +23,7 @@ const cfg = reactive({
   hardware: 'jetson_orin_nx_16gb',
   w_quant: '4-bit', a_quant: '8-bit', kv_quant: '8-bit',
   num_text_tokens: 16, batch_size: 1, use_flashattention: false,
-  control_hz: 10,
+  control_hz: 10, exec_horizon: 0,   // exec_horizon 0 = execute the full chunk open-loop
   // architecture choices (override the preset's defaults)
   action_head: 'ar',                 // 'ar' | 'flow' | 'parallel'
   tokens_per_action: 7, action_horizon: 1,
@@ -65,7 +65,8 @@ function fetchGraph() {
   const vla_config = {
     w_quant: cfg.w_quant, a_quant: cfg.a_quant, kv_quant: cfg.kv_quant,
     num_text_tokens: cfg.num_text_tokens, batch_size: cfg.batch_size,
-    use_flashattention: cfg.use_flashattention, control_hz: cfg.control_hz,
+    use_flashattention: cfg.use_flashattention,
+    control_hz: cfg.control_hz, exec_horizon: cfg.exec_horizon,
     action_head: cfg.action_head,
     tokens_per_action: cfg.tokens_per_action, action_horizon: cfg.action_horizon,
     num_flow_steps: cfg.num_flow_steps, action_chunk: cfg.action_chunk,
@@ -193,6 +194,8 @@ onMounted(fetchAvailable)
         <label>Text prompt tokens <input type="number" min="0" v-model.number.lazy="cfg.num_text_tokens" /></label>
         <label>Batch size <input type="number" min="1" v-model.number.lazy="cfg.batch_size" /></label>
         <label>Control freq (Hz) <input type="number" min="0" step="1" v-model.number.lazy="cfg.control_hz" /></label>
+        <label>Exec horizon <input type="number" min="0" step="1" v-model.number.lazy="cfg.exec_horizon"
+          title="actions executed open-loop before replanning; 0 = full chunk" /></label>
         <label class="cb">Flash attention <input type="checkbox" v-model="cfg.use_flashattention" /></label>
 
         <h3>Quantization</h3>
@@ -223,9 +226,9 @@ onMounted(fetchAvailable)
               <div class="card_sub">{{ gib(result.memory.peak) }} / {{ gib(result.memory.capacity) }}</div>
             </div>
             <div v-if="result.control" class="card" :class="result.control.ok ? 'ok' : 'bad'">
-              <div class="card_label">Control @ {{ result.control.hz }} Hz · chunk {{ result.control.horizon }}</div>
+              <div class="card_label">Control @ {{ result.control.hz }} Hz · exec {{ result.control.exec_horizon }}/{{ result.control.chunk_horizon }}</div>
               <div class="card_big">{{ result.control.ok ? 'WITHIN' : 'OVER' }}</div>
-              <div class="card_sub">budget {{ strNumberTime(result.control.budget) }}s ({{ result.control.horizon }}× period) ·
+              <div class="card_sub">budget {{ strNumberTime(result.control.budget) }}s ({{ result.control.exec_horizon }}× period) ·
                 sustains ~{{ result.control.achievable_hz.toFixed(1) }} Hz open-loop</div>
             </div>
           </div>

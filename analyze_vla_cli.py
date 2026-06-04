@@ -27,7 +27,9 @@ def main():
     parser.add_argument("--a_bit", type=int, default=16)
     parser.add_argument("--kv_bit", type=int, default=None)
     parser.add_argument("--use_flashattention", action="store_true")
-    parser.add_argument("--control_hz", type=float, default=None, help="control frequency; checks the latency budget 1/Hz")
+    parser.add_argument("--control_hz", type=float, default=None, help="control frequency; checks the latency budget")
+    parser.add_argument("--exec_horizon", type=int, default=None,
+                        help="actions executed open-loop before replanning (default: full chunk)")
     args = parser.parse_args()
 
     r = analyze_vla(
@@ -58,12 +60,12 @@ def main():
         print(f"  device cap     {_gib(r['memory_capacity'])}  ->  {verdict}")
 
     if args.control_hz:
-        cb = control_budget(VLA_MODELS[args.vla], r["total_time"], args.control_hz)
+        cb = control_budget(VLA_MODELS[args.vla], r["total_time"], args.control_hz, exec_horizon=args.exec_horizon)
         ok = "within budget" if cb["ok"] else "OVER budget"
-        print(f"\nControl @ {args.control_hz} Hz, chunk horizon {cb['horizon']} (open-loop): "
-              f"budget {cb['horizon']}/{args.control_hz}Hz = {str_number_time(cb['budget'])}s  ->  "
-              f"latency {str_number_time(r['total_time'])}s ({ok}); "
-              f"sustains ~{cb['achievable_hz']:.1f} Hz")
+        print(f"\nControl @ {args.control_hz} Hz: predicts {cb['chunk_horizon']} actions/inference, "
+              f"executes {cb['exec_horizon']} open-loop  ->  "
+              f"budget {cb['exec_horizon']}/{args.control_hz}Hz = {str_number_time(cb['budget'])}s  vs  "
+              f"latency {str_number_time(r['total_time'])}s ({ok}); sustains ~{cb['achievable_hz']:.1f} Hz")
     print()
 
 
