@@ -76,7 +76,13 @@ Pattern: `AutoConfig.from_pretrained(model_id)` supplies raw dims; a hand-writte
 
 Already present: batch_size, seqlen, gen_length, w/a/kv quant bits, flash-attention, tp_size, stage.
 
-Add for VLA: image resolution → num vision tokens, action chunk size, action horizon, num denoising/flow steps, and **control frequency (Hz)** — converting latency into the answer that matters: *does end-to-end latency fit the 1/Hz control budget on this device?*
+Add for VLA: image resolution → num vision tokens, action chunk size, action horizon, num denoising/flow steps, and **control frequency (Hz)** — converting latency into the answer that matters: *does end-to-end latency fit the control budget on this device?*
+
+**Control budget under action chunking (two distinct horizons, see `vla.py` `chunk_horizon`/`control_budget`):**
+- **chunk horizon** (`action_chunk` / `action_horizon`) = actions *predicted* per inference → drives **latency** (the action-phase compute). 
+- **execution horizon** (`exec_horizon`, default = full chunk) = actions *executed open-loop* before replanning (receding horizon) → drives the **budget = exec_horizon / control_hz**.
+
+So budget is NOT `1/control_hz` — one inference buys `exec_horizon` control periods of runway (sustained open-loop rate = `exec_horizon / latency`). OpenVLA (horizon 1) collapses to `1/control_hz`. Assumes inference overlaps execution of the previous chunk.
 
 ## 5. Analyzer design for VLA
 
