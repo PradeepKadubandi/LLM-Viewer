@@ -4729,6 +4729,7 @@
     "kv_cache": 2506752.0,
     "memory_capacity": 68719476736,
     "num_image_tokens": 256,
+    "num_images": 1,
     "peak_memory": 2682492416.0,
     "phases/action_generation/OPs": 281111760000.0,
     "phases/action_generation/chunk": 50,
@@ -4756,6 +4757,7 @@
     "phases/vision_encoder/time": 0.0038226600000000003,
     "phases/vision_encoder/weight": 411070464.0,
     "prefix_len": 272,
+    "tokens_per_image": 256,
     "total_time": 0.03372291499999999,
     "total_weight": 2664875520.0
   },
@@ -4769,6 +4771,7 @@
     "kv_cache": 6679552.0,
     "memory_capacity": 17179869184,
     "num_image_tokens": 577,
+    "num_images": 1,
     "peak_memory": 834576448.0,
     "phases/action_generation/OPs": 334855618560.0,
     "phases/action_generation/chunk": 50,
@@ -4796,6 +4799,7 @@
     "phases/vision_encoder/time": 0.014041061615039999,
     "phases/vision_encoder/weight": 150994944.0,
     "prefix_len": 593,
+    "tokens_per_image": 577,
     "total_time": 0.07075775643712001,
     "total_weight": 787781632.0
   },
@@ -4809,6 +4813,7 @@
     "kv_cache": 6679552.0,
     "memory_capacity": 17179869184,
     "num_image_tokens": 577,
+    "num_images": 1,
     "peak_memory": 834576448.0,
     "phases/action_generation/OPs": 326090808000.0,
     "phases/action_generation/chunk": 50,
@@ -4836,6 +4841,7 @@
     "phases/vision_encoder/time": 0.014041061615039999,
     "phases/vision_encoder/weight": 150994944.0,
     "prefix_len": 593,
+    "tokens_per_image": 577,
     "total_time": 0.07256619393712001,
     "total_weight": 787781632.0
   },
@@ -4849,6 +4855,7 @@
     "kv_cache": 6679552.0,
     "memory_capacity": 17179869184,
     "num_image_tokens": 577,
+    "num_images": 1,
     "peak_memory": 683581504.0,
     "phases/action_generation/OPs": 14791529536,
     "phases/action_generation/action_tokens": 7,
@@ -4874,6 +4881,7 @@
     "phases/vision_encoder/time": 0.014041061615039999,
     "phases/vision_encoder/weight": 150994944.0,
     "prefix_len": 593,
+    "tokens_per_image": 577,
     "total_time": 0.08648054643712,
     "total_weight": 636786688.0
   }

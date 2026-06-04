@@ -36,13 +36,14 @@ def get_vla_graph(vla_model_id, hardware, vla_config):
     w_bit = get_quant_bit(vla_config["w_quant"])
     a_bit = get_quant_bit(vla_config["a_quant"])
     kv_bit = get_quant_bit(vla_config["kv_quant"])
-    num_text_tokens = int(vla_config.get("num_text_tokens", 16))
+    num_text_tokens = int(vla_config.get("num_text_tokens", 256))
+    num_images = int(vla_config.get("num_images", 1))
     batch_size = int(vla_config.get("batch_size", 1))
     use_flashattention = bool(vla_config.get("use_flashattention", False))
 
     r = analyze_vla(
         cfg, hardware,
-        num_text_tokens=num_text_tokens, batchsize=batch_size,
+        num_text_tokens=num_text_tokens, num_images=num_images, batchsize=batch_size,
         w_bit=w_bit, a_bit=a_bit, kv_bit=kv_bit,
         use_flashattention=use_flashattention,
     )

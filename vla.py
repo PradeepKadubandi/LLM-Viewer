@@ -171,7 +171,8 @@ def _transformer_forward(
 def analyze_vla(
     vla_cfg,
     hardware,
-    num_text_tokens=16,
+    num_text_tokens=256,
+    num_images=1,
     batchsize=1,
     w_bit=16,
     a_bit=16,
@@ -179,22 +180,30 @@ def analyze_vla(
     use_flashattention=False,
 ):
     """Analyze one observe->prefill VLA step. Returns a phase/total breakdown
-    plus a memory-fit verdict for the given hardware."""
+    plus a memory-fit verdict for the given hardware.
+
+    num_images: number of camera views. They are encoded through the shared
+    vision tower (batched -> weights counted once, compute scales with N) and
+    contribute N * tokens_per_image to the LLM prefix (and the action expert's
+    cross-attention).
+    """
     if kv_bit is None:
         kv_bit = a_bit
     w_byte, a_byte, kv_byte = w_bit / 8, a_bit / 8, kv_bit / 8
 
-    # --- Vision encoder ---------------------------------------------------
+    # --- Vision encoder (N camera views, batched through one tower) --------
     vmp = importlib.import_module("model_params.vision_encoders").model_params[vla_cfg.vision_model_id]
-    n_img = vit_cfg.get_num_image_tokens(vmp)
+    n_img = vit_cfg.get_num_image_tokens(vmp)          # tokens per image
     n_patches = n_img - (1 if getattr(vmp, "has_cls_token", False) else 0)
     patch_dim = vit_cfg.get_patch_dim(vmp)
     vision_hidden = vit_cfg.get_hidden_size(vmp)
     vision_heads = vit_cfg.get_num_attention_heads(vmp)
+    vision_batch = batchsize * num_images               # N images share the tower weights
+    total_img_tokens = num_images * n_img               # image tokens in the LLM prefix
 
     v_an = ModelAnalyzer(vla_cfg.vision_model_id, hardware, "configs/vit.py", source="vision_encoders")
     v_res = v_an.analyze(
-        seqlen=n_img, batchsize=batchsize, w_bit=w_bit, a_bit=a_bit, kv_bit=kv_bit,
+        seqlen=n_img, batchsize=vision_batch, w_bit=w_bit, a_bit=a_bit, kv_bit=kv_bit,
         use_flashattention=use_flashattention,
     )
     v_pf = v_res["total_results"]["prefill"]
@@ -202,7 +211,7 @@ def analyze_vla(
 
     # patch embedding runs once per image (not per layer)
     v_ctx = OpContext(
-        batchsize, a_byte, w_byte, kv_byte,
+        vision_batch, a_byte, w_byte, kv_byte,
         hidden_size=vision_hidden, num_attention_heads=vision_heads,
         num_key_value_heads=vision_heads, head_size=vision_hidden // vision_heads,
         onchip_buffer=0,
@@ -210,10 +219,10 @@ def analyze_vla(
     pe = OP_HANDLERS["patch_embed"](v_ctx, None, None, num_patches=n_patches, patch_dim=patch_dim)
     pe_eval = evaluate_op(**pe, bandwidth=bandwidth, max_OPS=max_OPS)
 
-    # --- LLM backbone prefill over [image tokens + text tokens] -----------
+    # --- LLM backbone prefill over [all image tokens + text tokens] -------
     l_an = ModelAnalyzer(vla_cfg.llm_model_id, hardware, vla_cfg.llm_config_file, source=vla_cfg.llm_source)
     llm_hidden = l_an.config.get_hidden_size(l_an.model_params)
-    prefix_len = n_img + num_text_tokens
+    prefix_len = total_img_tokens + num_text_tokens
     l_res = l_an.analyze(
         seqlen=prefix_len, batchsize=batchsize, w_bit=w_bit, a_bit=a_bit, kv_bit=kv_bit,
         use_flashattention=use_flashattention,
@@ -226,7 +235,7 @@ def analyze_vla(
         hidden_size=llm_hidden, num_attention_heads=1, num_key_value_heads=1,
         head_size=1, onchip_buffer=0,
     )
-    proj = OP_HANDLERS["linear"](p_ctx, n_img, n_img, ic=vision_hidden, oc=llm_hidden, is_kv_proj=False)
+    proj = OP_HANDLERS["linear"](p_ctx, total_img_tokens, total_img_tokens, ic=vision_hidden, oc=llm_hidden, is_kv_proj=False)
     proj_eval = evaluate_op(**proj, bandwidth=bandwidth, max_OPS=max_OPS)
 
     # --- Action generation ------------------------------------------------
@@ -294,7 +303,9 @@ def analyze_vla(
     return {
         "config": vla_cfg.name,
         "hardware": hardware,
-        "num_image_tokens": n_img,
+        "num_images": num_images,
+        "tokens_per_image": n_img,
+        "num_image_tokens": total_img_tokens,
         "prefix_len": prefix_len,
         "phases": phases,
         "total_time": total_time,

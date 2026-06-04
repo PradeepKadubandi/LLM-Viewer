@@ -22,8 +22,8 @@ const cfg = reactive({
   vla_model: 'tinyvla_demo',
   hardware: 'jetson_orin_nx_16gb',
   w_quant: '4-bit', a_quant: '8-bit', kv_quant: '8-bit',
-  num_text_tokens: 16, batch_size: 1, use_flashattention: false,
-  control_hz: 10, exec_horizon: 0,   // exec_horizon 0 = execute the full chunk open-loop
+  num_text_tokens: 256, num_images: 1, batch_size: 1, use_flashattention: false,
+  control_hz: 10, exec_horizon: 10,   // exec_horizon 0 = execute the full chunk open-loop
   // architecture choices (override the preset's defaults)
   action_head: 'ar',                 // 'ar' | 'flow' | 'parallel'
   tokens_per_action: 7, action_horizon: 1,
@@ -65,7 +65,7 @@ function fetchGraph() {
   const vla_config = {
     w_quant: cfg.w_quant, a_quant: cfg.a_quant, kv_quant: cfg.kv_quant,
     num_text_tokens: cfg.num_text_tokens, batch_size: cfg.batch_size,
-    use_flashattention: cfg.use_flashattention,
+    use_flashattention: cfg.use_flashattention, num_images: cfg.num_images,
     control_hz: cfg.control_hz, exec_horizon: cfg.exec_horizon,
     action_head: cfg.action_head,
     tokens_per_action: cfg.tokens_per_action, action_horizon: cfg.action_horizon,
@@ -191,6 +191,8 @@ onMounted(fetchAvailable)
         </template>
 
         <h3>Inference</h3>
+        <label>Camera images <input type="number" min="1" v-model.number.lazy="cfg.num_images"
+          title="number of camera views; each adds tokens_per_image to the LLM prefix" /></label>
         <label>Text prompt tokens <input type="number" min="0" v-model.number.lazy="cfg.num_text_tokens" /></label>
         <label>Batch size <input type="number" min="1" v-model.number.lazy="cfg.batch_size" /></label>
         <label>Control freq (Hz) <input type="number" min="0" step="1" v-model.number.lazy="cfg.control_hz" /></label>
@@ -209,8 +211,8 @@ onMounted(fetchAvailable)
         <div v-if="errorMsg" class="err">{{ errorMsg }}</div>
         <template v-if="result">
           <div class="meta">{{ result.config }} on {{ result.hardware }} ·
-            {{ result.num_image_tokens }} image tokens · {{ result.prefix_len }}-token prefix ·
-            {{ result.action_head }} head</div>
+            {{ result.num_images }}×{{ result.tokens_per_image }} = {{ result.num_image_tokens }} image tokens ·
+            {{ result.prefix_len }}-token prefix · {{ result.action_head }} head</div>
           <div v-if="cfg.hardware.includes('thor')" class="caveat">⚠ Jetson Thor specs are preliminary (derived from the FP4 headline).</div>
 
           <!-- verdict cards -->

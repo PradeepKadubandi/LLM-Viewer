@@ -21,27 +21,29 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("vla", choices=list(VLA_MODELS.keys()), help="VLA preset")
     parser.add_argument("hardware", type=str, help="hardware key, e.g. jetson_orin_nx_16gb")
-    parser.add_argument("--num_text_tokens", type=int, default=16, help="language prompt tokens")
+    parser.add_argument("--num_text_tokens", type=int, default=256, help="language prompt tokens")
+    parser.add_argument("--num_images", type=int, default=1, help="number of camera views")
     parser.add_argument("--batchsize", type=int, default=1)
     parser.add_argument("--w_bit", type=int, default=16)
     parser.add_argument("--a_bit", type=int, default=16)
     parser.add_argument("--kv_bit", type=int, default=None)
     parser.add_argument("--use_flashattention", action="store_true")
     parser.add_argument("--control_hz", type=float, default=None, help="control frequency; checks the latency budget")
-    parser.add_argument("--exec_horizon", type=int, default=None,
-                        help="actions executed open-loop before replanning (default: full chunk)")
+    parser.add_argument("--exec_horizon", type=int, default=10,
+                        help="actions executed open-loop before replanning (0 = full chunk)")
     args = parser.parse_args()
 
     r = analyze_vla(
         VLA_MODELS[args.vla], args.hardware,
-        num_text_tokens=args.num_text_tokens, batchsize=args.batchsize,
+        num_text_tokens=args.num_text_tokens, num_images=args.num_images, batchsize=args.batchsize,
         w_bit=args.w_bit, a_bit=args.a_bit, kv_bit=args.kv_bit,
         use_flashattention=args.use_flashattention,
     )
 
     print(f"\nVLA: {r['config']}  |  Hardware: {r['hardware']}")
-    print(f"image tokens: {r['num_image_tokens']}  |  LLM prefix: {r['prefix_len']} tokens "
-          f"(+{args.num_text_tokens} text)  |  w{args.w_bit}a{args.a_bit}kv{args.kv_bit or args.a_bit}")
+    print(f"{r['num_images']} cam x {r['tokens_per_image']} = {r['num_image_tokens']} image tokens  |  "
+          f"LLM prefix: {r['prefix_len']} tokens (+{args.num_text_tokens} text)  |  "
+          f"w{args.w_bit}a{args.a_bit}kv{args.kv_bit or args.a_bit}")
     print("-" * 64)
     print(f"{'phase':<16}{'OPs':>12}{'latency':>14}")
     for name, p in r["phases"].items():
