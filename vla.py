@@ -27,9 +27,14 @@ from roofline_model import evaluate_op
 from hardwares.hardware_params import hardware_params
 
 
+# Default action-expert dims (~300M, pi0/Gemma-expert scale) when a flow/parallel
+# VLA preset doesn't specify its own.
+DEFAULT_ACTION_EXPERT = {"hidden": 1024, "heads": 8, "kv_heads": 8, "layers": 18, "intermediate": 4096}
+
+
 @dataclass
 class VLAConfig:
-    """A VLA = one vision encoder + one LLM backbone (+ projector)."""
+    """A VLA = one vision encoder + one LLM backbone (+ projector + action head)."""
 
     name: str
     vision_model_id: str           # key in model_params/vision_encoders.py
@@ -37,11 +42,85 @@ class VLAConfig:
     llm_source: str = "huggingface"
     llm_config_file: str = None    # None -> ModelAnalyzer auto-search
 
+    # Action head: "ar" (autoregressive discrete tokens, e.g. OpenVLA),
+    # "flow" (diffusion / flow-matching chunk, e.g. pi0/Octo), or "parallel"
+    # (single-pass action expert).
+    action_head: str = "ar"
+    # autoregressive head:
+    action_horizon: int = 1        # actions per chunk
+    tokens_per_action: int = 7     # discrete tokens per action (e.g. 7-DoF)
+    # flow / diffusion / parallel head:
+    num_flow_steps: int = 10       # denoising/flow steps ("parallel" forces 1)
+    action_chunk: int = 50         # action tokens processed by the expert
+    action_expert: dict = None     # expert dims; None -> DEFAULT_ACTION_EXPERT
+    expert_attention: str = "quadratic"  # "quadratic" or "linear" (SARA-RT)
+
 
 def _phase(time, OPs, weight=0.0, **extra):
     d = {"time": time, "OPs": OPs, "weight": weight}
     d.update(extra)
     return d
+
+
+def _transformer_forward(
+    dims, n_layers, q_seqlen, kv_seqlen, batchsize, a_byte, w_byte, kv_byte,
+    bandwidth, max_OPS, onchip_buffer=0, use_flashattention=False,
+    gated_mlp=True, attention_type="quadratic",
+):
+    """Cost of one forward pass of an arbitrary transformer, summed over layers.
+
+    Generalizes the per-layer op walk to arbitrary query/kv lengths (q != kv,
+    e.g. chunked/cross attention) and to linear attention -- capabilities the
+    LLM-centric analyze() doesn't expose. Returns (time, OPs, weight) for the
+    whole stack. Used for the flow/parallel action expert.
+    """
+    hidden = dims["hidden"]
+    heads = dims["heads"]
+    kv_heads = dims.get("kv_heads", heads)
+    inter = dims["intermediate"]
+    ctx = OpContext(
+        batchsize, a_byte, w_byte, kv_byte,
+        hidden_size=hidden, num_attention_heads=heads, num_key_value_heads=kv_heads,
+        head_size=hidden // heads, onchip_buffer=onchip_buffer,
+    )
+    kvh_dim = hidden * kv_heads // heads
+    if gated_mlp:
+        lin = {
+            "q_proj": (hidden, hidden), "k_proj": (hidden, kvh_dim), "v_proj": (hidden, kvh_dim),
+            "out_proj": (hidden, hidden), "gate_proj": (hidden, inter), "up_proj": (hidden, inter),
+            "down_proj": (inter, hidden),
+        }
+    else:
+        lin = {
+            "q_proj": (hidden, hidden), "k_proj": (hidden, kvh_dim), "v_proj": (hidden, kvh_dim),
+            "out_proj": (hidden, hidden), "fc1": (hidden, inter), "fc2": (inter, hidden),
+        }
+
+    time = ops = weight = 0.0
+
+    def add(res):
+        nonlocal time, ops, weight
+        ev = evaluate_op(**res, bandwidth=bandwidth, max_OPS=max_OPS)
+        time += ev["inference_time"]
+        ops += res["OPs"]
+        weight += res["load_weight"]
+
+    for name, (ic, oc) in lin.items():
+        add(OP_HANDLERS["linear"](ctx, q_seqlen, kv_seqlen, ic=ic, oc=oc, is_kv_proj=name in ("k_proj", "v_proj")))
+    if attention_type == "linear":
+        add(OP_HANDLERS["linear_attention"](ctx, q_seqlen, kv_seqlen))
+    elif use_flashattention:
+        add(OP_HANDLERS["fused_attention"](ctx, q_seqlen, kv_seqlen))
+    else:
+        add(OP_HANDLERS["qk_matmul"](ctx, q_seqlen, kv_seqlen))
+        add(OP_HANDLERS["sv_matmul"](ctx, q_seqlen, kv_seqlen))
+        add(OP_HANDLERS["softmax"](ctx, q_seqlen, kv_seqlen))
+    add(OP_HANDLERS["norm"](ctx, q_seqlen, kv_seqlen))
+    add(OP_HANDLERS["norm"](ctx, q_seqlen, kv_seqlen))
+    add(OP_HANDLERS["add"](ctx, q_seqlen, kv_seqlen))
+    add(OP_HANDLERS["add"](ctx, q_seqlen, kv_seqlen))
+    add(OP_HANDLERS["act"](ctx, q_seqlen, kv_seqlen))
+    return time * n_layers, ops * n_layers, weight * n_layers
 
 
 def analyze_vla(
@@ -105,6 +184,35 @@ def analyze_vla(
     proj = OP_HANDLERS["linear"](p_ctx, n_img, n_img, ic=vision_hidden, oc=llm_hidden, is_kv_proj=False)
     proj_eval = evaluate_op(**proj, bandwidth=bandwidth, max_OPS=max_OPS)
 
+    # --- Action generation ------------------------------------------------
+    head = vla_cfg.action_head
+    if head == "ar":
+        # Autoregressive discrete action tokens via the LLM backbone decode.
+        n_action_tokens = vla_cfg.action_horizon * vla_cfg.tokens_per_action
+        l_dec = l_res["total_results"]["decode"]  # one decode step at ~prefix_len context
+        action = _phase(
+            n_action_tokens * l_dec["inference_time"], n_action_tokens * l_dec["OPs"],
+            weight=0.0,  # reuses the resident LLM weights
+            mode="ar", action_tokens=n_action_tokens,
+        )
+    elif head in ("flow", "parallel"):
+        # Separate action expert run num_steps times over the action chunk.
+        steps = 1 if head == "parallel" else vla_cfg.num_flow_steps
+        dims = vla_cfg.action_expert or DEFAULT_ACTION_EXPERT
+        chunk = vla_cfg.action_chunk
+        per_t, per_ops, expert_weight = _transformer_forward(
+            dims, dims["layers"], chunk, chunk, batchsize, a_byte, w_byte, kv_byte,
+            bandwidth, max_OPS, use_flashattention=use_flashattention,
+            gated_mlp=True, attention_type=vla_cfg.expert_attention,
+        )
+        action = _phase(
+            steps * per_t, steps * per_ops,
+            weight=expert_weight,  # expert weights resident once (reloaded each step in time)
+            mode=head, steps=steps, chunk=chunk, expert_attention=vla_cfg.expert_attention,
+        )
+    else:
+        raise ValueError(f"unknown action_head {head!r}")
+
     # --- Aggregate phases -------------------------------------------------
     phases = {
         "patch_embed": _phase(pe_eval["inference_time"], pe["OPs"], pe["load_weight"]),
@@ -114,6 +222,7 @@ def analyze_vla(
             l_pf["inference_time"], l_pf["OPs"], l_pf["memory_consumption_weight"],
             kv_cache=l_pf["memory_consumption_kv_cache"],
         ),
+        "action_generation": action,
     }
     total_time = sum(p["time"] for p in phases.values())
     total_weight = sum(p["weight"] for p in phases.values())

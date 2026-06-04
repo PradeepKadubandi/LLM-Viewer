@@ -168,6 +168,27 @@ def patch_embed(ctx, q_seqlen, kv_seqlen, num_patches, patch_dim):
     )
 
 
+def linear_attention(ctx, q_seqlen, kv_seqlen):
+    """O(L) linear attention (e.g. SARA-RT / linear transformers).
+
+    Instead of forming the L*L softmax score matrix, accumulate a per-head
+    d_head*d_head KV summary over the kv tokens, then apply it to each query:
+    cost is linear in sequence length, with no L^2 scores or softmax.
+    """
+    hs = ctx.head_size
+    nah = ctx.num_attention_heads
+    nkvh = ctx.num_key_value_heads
+    bs = ctx.batchsize
+    build_kv_OPs = kv_seqlen * hs * hs * nah * bs * 2  # KV summary from K,V
+    apply_q_OPs = q_seqlen * hs * hs * nah * bs * 2     # Q @ KV-summary
+    return _result(
+        OPs=build_kv_OPs + apply_q_OPs,
+        load_act=q_seqlen * hs * bs * nah * ctx.a_byte,    # Q
+        store_act=q_seqlen * hs * bs * nah * ctx.a_byte,   # O
+        load_kv_cache=kv_seqlen * hs * bs * nkvh * ctx.kv_byte * 2,  # K and V
+    )
+
+
 def norm(ctx, q_seqlen, kv_seqlen):
     # sum sub pow sum div mul add -> 7 ops per element
     n = ctx.batchsize * ctx.hidden_size * q_seqlen
@@ -194,6 +215,7 @@ OP_HANDLERS = {
     "sv_matmul": sv_matmul,
     "softmax": softmax,
     "fused_attention": fused_attention,
+    "linear_attention": linear_attention,
     "norm": norm,
     "add": add,
     "act": act,

@@ -152,8 +152,22 @@ CASES = [
         "params": {"seqlen": 577, "batchsize": 1, "w_bit": 8, "a_bit": 8, "kv_bit": 8},
     },
     {
-        "name": "vla/tinyvla_demo/orin_nx/w4a8kv8",
+        "name": "vla/tinyvla_demo/orin_nx/w4a8kv8",  # AR action head
         "model_id": "tinyvla_demo",
+        "hardware": "jetson_orin_nx_16gb",
+        "kind": "vla",
+        "params": {"num_text_tokens": 16, "batchsize": 1, "w_bit": 4, "a_bit": 8, "kv_bit": 8},
+    },
+    {
+        "name": "vla/tinyvla_flow_demo/orin_nx/w4a8kv8",  # flow/diffusion action head
+        "model_id": "tinyvla_flow_demo",
+        "hardware": "jetson_orin_nx_16gb",
+        "kind": "vla",
+        "params": {"num_text_tokens": 16, "batchsize": 1, "w_bit": 4, "a_bit": 8, "kv_bit": 8},
+    },
+    {
+        "name": "vla/tinyvla_flow_linear_demo/orin_nx/w4a8kv8",  # linear-attention expert
+        "model_id": "tinyvla_flow_linear_demo",
         "hardware": "jetson_orin_nx_16gb",
         "kind": "vla",
         "params": {"num_text_tokens": 16, "batchsize": 1, "w_bit": 4, "a_bit": 8, "kv_bit": 8},
