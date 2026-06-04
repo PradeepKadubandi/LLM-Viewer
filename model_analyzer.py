@@ -1,7 +1,7 @@
 import os
 import importlib
 from hardwares.hardware_params import hardware_params
-from roofline_model import roofline_analyze
+from roofline_model import roofline_analyze, evaluate_op
 from transformers import AutoTokenizer, AutoConfig, AutoModelForCausalLM
 from utils import str_number, str_number_time
 from op_handlers import OpContext, OP_HANDLERS
@@ -66,22 +66,9 @@ class ModelAnalyzer:
     ):
 
         bandwidth, max_OPS, onchip_buffer = self.get_hardware_info()
-        memory_access = load_weight + load_act + store_act + load_kv_cache + store_kv_cache
-        arithmetic_intensity, performance, bound = roofline_analyze(bandwidth, max_OPS, OPs, memory_access)
-        inference_time = OPs / performance
-        self.results[stage][name] = {
-            "OPs": OPs,
-            "memory_access": memory_access,
-            "arithmetic_intensity": arithmetic_intensity,
-            "performance": performance,
-            "bound": bound,
-            "load_weight": load_weight,
-            "load_act": load_act,
-            "store_act": store_act,
-            "load_kv_cache": load_kv_cache,
-            "store_kv_cache": store_kv_cache,
-            "inference_time": inference_time,
-        }
+        self.results[stage][name] = evaluate_op(
+            OPs, load_weight, load_act, store_act, load_kv_cache, store_kv_cache, bandwidth, max_OPS
+        )
 
     def save_csv(self, save_path=None):
         if save_path is None:

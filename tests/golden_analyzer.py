@@ -132,6 +132,32 @@ CASES = [
         "kind": "analyze",
         "params": {"seqlen": 2048, "batchsize": 1},
     },
+    # --- Vision encoder (ViT) + VLA orchestration --------------------------
+    {
+        "name": "clip_vit_l/A6000/b1_s577_fp16",
+        "model_id": "clip_vit_large_p14_336",
+        "hardware": "nvidia_A6000",
+        "source": "vision_encoders",
+        "config_file": "configs/vit.py",
+        "kind": "analyze",
+        "params": {"seqlen": 577, "batchsize": 1},  # (336/14)^2 + 1 CLS
+    },
+    {
+        "name": "clip_vit_l/orin_nx/b1_s577_w8a8",
+        "model_id": "clip_vit_large_p14_336",
+        "hardware": "jetson_orin_nx_16gb",
+        "source": "vision_encoders",
+        "config_file": "configs/vit.py",
+        "kind": "analyze",
+        "params": {"seqlen": 577, "batchsize": 1, "w_bit": 8, "a_bit": 8, "kv_bit": 8},
+    },
+    {
+        "name": "vla/tinyvla_demo/orin_nx/w4a8kv8",
+        "model_id": "tinyvla_demo",
+        "hardware": "jetson_orin_nx_16gb",
+        "kind": "vla",
+        "params": {"num_text_tokens": 16, "batchsize": 1, "w_bit": 4, "a_bit": 8, "kv_bit": 8},
+    },
     # --- DiT-S/2 (local model_params source) -------------------------------
     {
         "name": "DiT-S2/A6000/b1_s256_fp16",
@@ -159,8 +185,12 @@ def flatten(obj, prefix=""):
 
 
 def run_case(case):
+    if case["kind"] == "vla":
+        from vla import analyze_vla
+        from model_params.vla_models import VLA_MODELS
+        return flatten(analyze_vla(VLA_MODELS[case["model_id"]], case["hardware"], **case["params"]))
     analyzer = ModelAnalyzer(
-        case["model_id"], case["hardware"], None, source=case["source"]
+        case["model_id"], case["hardware"], case.get("config_file"), source=case["source"]
     )
     if case["kind"] == "analyze":
         result = analyzer.analyze(**case["params"])

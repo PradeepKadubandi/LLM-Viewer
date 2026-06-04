@@ -153,6 +153,21 @@ def fused_attention(ctx, q_seqlen, kv_seqlen):
     )
 
 
+def patch_embed(ctx, q_seqlen, kv_seqlen, num_patches, patch_dim):
+    """Vision patch embedding: split the image into `num_patches` patches and
+    project each (flattened length `patch_dim` = channels * patch_size^2) to
+    ctx.hidden_size. Equivalent to a conv with kernel=stride=patch_size,
+    expressed as a matmul; runs once per image (not per layer)."""
+    d = ctx.hidden_size
+    bs = ctx.batchsize
+    return _result(
+        OPs=num_patches * patch_dim * d * 2 * bs,
+        load_weight=patch_dim * d * ctx.w_byte,
+        load_act=bs * num_patches * patch_dim * ctx.a_byte,  # the input image
+        store_act=bs * num_patches * d * ctx.a_byte,
+    )
+
+
 def norm(ctx, q_seqlen, kv_seqlen):
     # sum sub pow sum div mul add -> 7 ops per element
     n = ctx.batchsize * ctx.hidden_size * q_seqlen
@@ -174,6 +189,7 @@ def act(ctx, q_seqlen, kv_seqlen):
 # Registry: op_type -> handler. Extend this to add new op types.
 OP_HANDLERS = {
     "linear": linear,
+    "patch_embed": patch_embed,
     "qk_matmul": qk_matmul,
     "sv_matmul": sv_matmul,
     "softmax": softmax,
