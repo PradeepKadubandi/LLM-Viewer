@@ -96,14 +96,15 @@ def _transformer_forward(
             "out_proj": (hidden, hidden), "fc1": (hidden, inter), "fc2": (inter, hidden),
         }
 
-    time = ops = weight = 0.0
+    time = ops = weight = mem = 0.0
 
     def add(res):
-        nonlocal time, ops, weight
+        nonlocal time, ops, weight, mem
         ev = evaluate_op(**res, bandwidth=bandwidth, max_OPS=max_OPS)
         time += ev["inference_time"]
         ops += res["OPs"]
         weight += res["load_weight"]
+        mem += ev["memory_access"]
 
     for name, (ic, oc) in lin.items():
         add(OP_HANDLERS["linear"](ctx, q_seqlen, kv_seqlen, ic=ic, oc=oc, is_kv_proj=name in ("k_proj", "v_proj")))
@@ -120,7 +121,7 @@ def _transformer_forward(
     add(OP_HANDLERS["add"](ctx, q_seqlen, kv_seqlen))
     add(OP_HANDLERS["add"](ctx, q_seqlen, kv_seqlen))
     add(OP_HANDLERS["act"](ctx, q_seqlen, kv_seqlen))
-    return time * n_layers, ops * n_layers, weight * n_layers
+    return time * n_layers, ops * n_layers, weight * n_layers, mem * n_layers
 
 
 def analyze_vla(
@@ -193,6 +194,7 @@ def analyze_vla(
         action = _phase(
             n_action_tokens * l_dec["inference_time"], n_action_tokens * l_dec["OPs"],
             weight=0.0,  # reuses the resident LLM weights
+            memory_access=n_action_tokens * l_dec["memory_access"],
             mode="ar", action_tokens=n_action_tokens,
         )
     elif head in ("flow", "parallel"):
@@ -200,7 +202,7 @@ def analyze_vla(
         steps = 1 if head == "parallel" else vla_cfg.num_flow_steps
         dims = vla_cfg.action_expert or DEFAULT_ACTION_EXPERT
         chunk = vla_cfg.action_chunk
-        per_t, per_ops, expert_weight = _transformer_forward(
+        per_t, per_ops, expert_weight, per_mem = _transformer_forward(
             dims, dims["layers"], chunk, chunk, batchsize, a_byte, w_byte, kv_byte,
             bandwidth, max_OPS, use_flashattention=use_flashattention,
             gated_mlp=True, attention_type=vla_cfg.expert_attention,
@@ -208,6 +210,7 @@ def analyze_vla(
         action = _phase(
             steps * per_t, steps * per_ops,
             weight=expert_weight,  # expert weights resident once (reloaded each step in time)
+            memory_access=steps * per_mem,
             mode=head, steps=steps, chunk=chunk, expert_attention=vla_cfg.expert_attention,
         )
     else:
@@ -215,12 +218,15 @@ def analyze_vla(
 
     # --- Aggregate phases -------------------------------------------------
     phases = {
-        "patch_embed": _phase(pe_eval["inference_time"], pe["OPs"], pe["load_weight"]),
-        "vision_encoder": _phase(v_pf["inference_time"], v_pf["OPs"], v_pf["memory_consumption_weight"]),
-        "projector": _phase(proj_eval["inference_time"], proj["OPs"], proj["load_weight"]),
+        "patch_embed": _phase(pe_eval["inference_time"], pe["OPs"], pe["load_weight"],
+                              memory_access=pe_eval["memory_access"]),
+        "vision_encoder": _phase(v_pf["inference_time"], v_pf["OPs"], v_pf["memory_consumption_weight"],
+                                 memory_access=v_pf["memory_access"]),
+        "projector": _phase(proj_eval["inference_time"], proj["OPs"], proj["load_weight"],
+                            memory_access=proj_eval["memory_access"]),
         "llm_prefill": _phase(
             l_pf["inference_time"], l_pf["OPs"], l_pf["memory_consumption_weight"],
-            kv_cache=l_pf["memory_consumption_kv_cache"],
+            memory_access=l_pf["memory_access"], kv_cache=l_pf["memory_consumption_kv_cache"],
         ),
         "action_generation": action,
     }
@@ -247,4 +253,5 @@ def analyze_vla(
         "peak_memory": peak_memory,
         "memory_capacity": capacity,
         "fits_in_memory": fits,
+        "hardware_info": {"bandwidth": bandwidth, "max_OPS": max_OPS},
     }

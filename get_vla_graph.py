@@ -47,13 +47,23 @@ def get_vla_graph(vla_model_id, hardware, vla_config):
         use_flashattention=use_flashattention,
     )
 
+    hw = r["hardware_info"]
+    bandwidth, max_OPS = hw["bandwidth"], hw["max_OPS"]
+    turning_point = max_OPS / bandwidth  # arithmetic intensity where compute-bound begins
+
     total = r["total_time"]
     phases = []
     for name, p in r["phases"].items():
+        mem = p.get("memory_access", 0)
+        ai = (p["OPs"] / mem) if mem else 0.0
         phase = {
             "name": name,
             "time": p["time"],
             "OPs": p["OPs"],
+            "memory_access": mem,
+            "arithmetic_intensity": ai,
+            "bound": "compute" if ai >= turning_point else "memory",
+            "performance": (p["OPs"] / p["time"]) if p["time"] else 0.0,  # effective OPS
             "weight": p.get("weight", 0),
             "share": (p["time"] / total if total else 0),
         }
@@ -68,6 +78,7 @@ def get_vla_graph(vla_model_id, hardware, vla_config):
         "num_image_tokens": r["num_image_tokens"],
         "prefix_len": r["prefix_len"],
         "action_head": cfg.action_head,
+        "hardware_info": {"bandwidth": bandwidth, "max_OPS": max_OPS, "turning_point": turning_point},
         "phases": phases,
         "total_time": total,
         "steps_per_sec": (1.0 / total if total else 0.0),

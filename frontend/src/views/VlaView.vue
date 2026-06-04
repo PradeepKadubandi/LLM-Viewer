@@ -5,6 +5,9 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import axios from 'axios'
 import { strNumber, strNumberTime } from '@/utils.js'
+import { Chart, registerables } from 'chart.js'
+import annotationPlugin from 'chartjs-plugin-annotation'
+Chart.register(...registerables, annotationPlugin)
 
 const ipPort = ref('127.0.0.1:5000')
 const vlaModels = ref([])      // [{id, action_head}]
@@ -12,6 +15,8 @@ const hardwares = ref([])
 const result = ref(null)
 const errorMsg = ref('')
 const loading = ref(false)
+const selectedPhase = ref(null)
+let rooflineChart = null
 
 const cfg = reactive({
   vla_model: 'tinyvla_demo',
@@ -62,13 +67,63 @@ function fetchGraph() {
   }
   axios.post('http://' + ipPort.value + '/get_vla_graph',
     { vla_model: cfg.vla_model, hardware: cfg.hardware, vla_config })
-    .then((r) => { result.value = r.data; loading.value = false })
+    .then((r) => {
+      result.value = r.data
+      loading.value = false
+      // keep the drill-down pinned to the same phase across re-fetches
+      if (selectedPhase.value) {
+        const np = r.data.phases.find((p) => p.name === selectedPhase.value.name)
+        selectedPhase.value = np || null
+        if (np) setTimeout(drawRoofline, 0)
+      }
+    })
     .catch((e) => {
       loading.value = false
       errorMsg.value = (e.response && e.response.status === 500)
         ? 'Backend error analyzing this model (gated weights need HF auth?).'
         : 'Request failed: ' + e.message
     })
+}
+
+function selectPhase(p) {
+  selectedPhase.value = p
+  setTimeout(drawRoofline, 0)
+}
+
+function drawRoofline() {
+  const el = document.getElementById('vlaRoofline')
+  if (!el || !result.value || !selectedPhase.value) return
+  if (rooflineChart) rooflineChart.destroy()
+  const hw = result.value.hardware_info
+  const { turning_point: tp, max_OPS: maxOPS } = hw
+  const ai = selectedPhase.value.arithmetic_intensity
+  const perf = selectedPhase.value.performance
+  const xMax = Math.max(tp * 1.5, ai * 1.2)
+  rooflineChart = new Chart(el, {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'Roofline', data: [{ x: 0, y: 0 }, { x: tp, y: maxOPS }, { x: xMax, y: maxOPS }],
+          borderColor: '#1f2d3d', borderWidth: 2, fill: false, pointRadius: 0 },
+        { label: 'phase', data: [{ x: ai, y: perf }], borderColor: '#e74c3c',
+          backgroundColor: '#e74c3c', pointRadius: 6, showLine: false },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { type: 'linear', min: 0, max: xMax, title: { display: true, text: 'Arithmetic intensity (OPs/byte)' } },
+        y: { min: 0, max: maxOPS * 1.1, title: { display: true, text: 'Performance (OPS)' },
+             ticks: { callback: (v) => v.toExponential(0) } },
+      },
+      plugins: {
+        legend: { display: false },
+        title: { display: true, text: 'Roofline — ' + selectedPhase.value.name + ' (' + selectedPhase.value.bound + '-bound)' },
+        annotation: { annotations: { aiLine: { type: 'line', xMin: ai, xMax: ai, borderColor: '#e74c3c',
+          borderWidth: 1, borderDash: [5, 5] } } },
+      },
+    },
+  })
 }
 
 let debounce = null
@@ -141,6 +196,7 @@ onMounted(fetchAvailable)
           <div class="meta">{{ result.config }} on {{ result.hardware }} ·
             {{ result.num_image_tokens }} image tokens · {{ result.prefix_len }}-token prefix ·
             {{ result.action_head }} head</div>
+          <div v-if="cfg.hardware.includes('thor')" class="caveat">⚠ Jetson Thor specs are preliminary (derived from the FP4 headline).</div>
 
           <!-- verdict cards -->
           <div class="cards">
@@ -169,19 +225,35 @@ onMounted(fetchAvailable)
                  :title="p.name + ' ' + (p.share * 100).toFixed(1) + '%'"></div>
           </div>
 
-          <!-- phase table -->
+          <!-- phase table (click a row to drill into its roofline) -->
           <table class="phases">
-            <thead><tr><th>phase</th><th>latency</th><th>share</th><th>OPs</th><th>weights</th></tr></thead>
+            <thead><tr><th>phase</th><th>latency</th><th>share</th><th>bound</th><th>OPs</th><th>weights</th></tr></thead>
             <tbody>
-              <tr v-for="p in result.phases" :key="p.name">
+              <tr v-for="p in result.phases" :key="p.name" class="clickable"
+                  :class="{ selrow: selectedPhase && selectedPhase.name === p.name }" @click="selectPhase(p)">
                 <td><span class="dot" :style="{ background: PHASE_COLORS[p.name] || '#888' }"></span>{{ p.name }}<span v-if="p.mode" class="tag">{{ p.mode }}</span></td>
                 <td>{{ strNumberTime(p.time) }}s</td>
                 <td>{{ (p.share * 100).toFixed(1) }}%</td>
+                <td><span :class="'bd_' + p.bound">{{ p.bound }}</span></td>
                 <td>{{ strNumber(p.OPs) }}</td>
                 <td>{{ p.weight ? gib(p.weight) : '—' }}</td>
               </tr>
             </tbody>
           </table>
+          <p class="hint">Click a phase for its roofline. Vision is a single-encoder approximation —
+            dual-encoder VLAs (e.g. OpenVLA's SigLIP+DINOv2) roughly double the vision phase.</p>
+
+          <div v-if="selectedPhase" class="roofline_panel">
+            <div class="roofline_canvas"><canvas id="vlaRoofline"></canvas></div>
+            <div class="roofline_meta">
+              <div><strong>{{ selectedPhase.name }}</strong></div>
+              <div>arithmetic intensity: <b>{{ selectedPhase.arithmetic_intensity.toFixed(1) }}</b> OPs/byte</div>
+              <div>bound: <span :class="'bd_' + selectedPhase.bound">{{ selectedPhase.bound }}</span>
+                (turning point {{ result.hardware_info.turning_point.toFixed(0) }})</div>
+              <div>effective perf: {{ selectedPhase.performance.toExponential(2) }} OPS</div>
+              <div>memory access: {{ strNumber(selectedPhase.memory_access) }}B</div>
+            </div>
+          </div>
 
           <!-- memory breakdown -->
           <h4>Memory footprint</h4>
@@ -242,4 +314,14 @@ table.phases tr.total td { font-weight: 700; border-top: 2px solid #ddd; }
 .err { color: #c0392b; padding: 10px; background: #fdecea; border-radius: 4px; }
 .loading { color: #7a8a99; }
 .note { color: #9aa7b3; font-size: 12px; margin-top: 16px; }
+.caveat { color: #b9770e; font-size: 12px; margin-bottom: 8px; }
+.hint { color: #9aa7b3; font-size: 12px; margin: 8px 0; }
+table.phases tr.clickable { cursor: pointer; }
+table.phases tr.clickable:hover { background: #f5f9ff; }
+table.phases tr.selrow { background: #eef6ff; }
+.bd_memory { color: #c0392b; font-weight: 600; }
+.bd_compute { color: #27ae60; font-weight: 600; }
+.roofline_panel { display: flex; gap: 18px; margin-top: 14px; align-items: center; }
+.roofline_canvas { width: 380px; height: 260px; }
+.roofline_meta { font-size: 13px; color: #444; display: flex; flex-direction: column; gap: 5px; }
 </style>
