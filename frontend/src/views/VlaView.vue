@@ -223,9 +223,10 @@ onMounted(fetchAvailable)
               <div class="card_sub">{{ gib(result.memory.peak) }} / {{ gib(result.memory.capacity) }}</div>
             </div>
             <div v-if="result.control" class="card" :class="result.control.ok ? 'ok' : 'bad'">
-              <div class="card_label">Control budget @ {{ result.control.hz }} Hz</div>
+              <div class="card_label">Control @ {{ result.control.hz }} Hz · chunk {{ result.control.horizon }}</div>
               <div class="card_big">{{ result.control.ok ? 'WITHIN' : 'OVER' }}</div>
-              <div class="card_sub">budget {{ strNumberTime(result.control.budget) }}s</div>
+              <div class="card_sub">budget {{ strNumberTime(result.control.budget) }}s ({{ result.control.horizon }}× period) ·
+                sustains ~{{ result.control.achievable_hz.toFixed(1) }} Hz open-loop</div>
             </div>
           </div>
 

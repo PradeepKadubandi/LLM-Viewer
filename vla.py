@@ -62,6 +62,39 @@ def _phase(time, OPs, weight=0.0, **extra):
     return d
 
 
+def execution_horizon(cfg):
+    """Actions produced per inference (executed open-loop before the next one).
+
+    Action chunking amortizes inference over multiple control steps: one forward
+    pass emits a chunk of H actions that the controller plays out open-loop, so
+    inference only needs to keep up at 1 every H control periods. H is the
+    action horizon for AR heads, or the action-chunk length for flow/parallel.
+    """
+    return cfg.action_horizon if cfg.action_head == "ar" else cfg.action_chunk
+
+
+def control_budget(cfg, total_time, control_hz):
+    """Deployment verdict under action chunking.
+
+    Budget = horizon / control_hz (H control periods of runway), NOT a single
+    1/control_hz period -- a pipeline slower than one control step can still be
+    real-time if it produces enough actions per inference. Assumes the full
+    chunk is executed open-loop (replan interval == chunk length); a shorter
+    receding-horizon replan would scale the budget down proportionally.
+    """
+    h = execution_horizon(cfg)
+    period = 1.0 / control_hz
+    budget = h * period
+    return {
+        "hz": control_hz,
+        "horizon": h,
+        "period": period,
+        "budget": budget,
+        "ok": total_time <= budget,
+        "achievable_hz": (h / total_time) if total_time else 0.0,  # open-loop control rate sustained
+    }
+
+
 def _transformer_forward(
     dims, n_layers, q_seqlen, kv_seqlen, batchsize, a_byte, w_byte, kv_byte,
     bandwidth, max_OPS, onchip_buffer=0, use_flashattention=False,

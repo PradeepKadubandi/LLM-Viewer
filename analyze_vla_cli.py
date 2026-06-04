@@ -8,7 +8,7 @@ Examples:
 
 import argparse
 
-from vla import analyze_vla
+from vla import analyze_vla, control_budget
 from model_params.vla_models import VLA_MODELS
 from utils import str_number, str_number_time
 
@@ -58,10 +58,12 @@ def main():
         print(f"  device cap     {_gib(r['memory_capacity'])}  ->  {verdict}")
 
     if args.control_hz:
-        budget = 1.0 / args.control_hz
-        ok = "within budget" if r["total_time"] <= budget else "OVER budget"
-        print(f"\nControl budget @ {args.control_hz} Hz = {str_number_time(budget)}s  ->  "
-              f"{str_number_time(r['total_time'])}s ({ok})")
+        cb = control_budget(VLA_MODELS[args.vla], r["total_time"], args.control_hz)
+        ok = "within budget" if cb["ok"] else "OVER budget"
+        print(f"\nControl @ {args.control_hz} Hz, chunk horizon {cb['horizon']} (open-loop): "
+              f"budget {cb['horizon']}/{args.control_hz}Hz = {str_number_time(cb['budget'])}s  ->  "
+              f"latency {str_number_time(r['total_time'])}s ({ok}); "
+              f"sustains ~{cb['achievable_hz']:.1f} Hz")
     print()
 
 

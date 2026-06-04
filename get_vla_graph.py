@@ -7,7 +7,7 @@ edge-deployment verdicts (memory-fit, control-frequency budget).
 
 import dataclasses
 
-from vla import analyze_vla
+from vla import analyze_vla, control_budget
 from model_params.vla_models import VLA_MODELS
 from get_model_graph import get_quant_bit
 
@@ -94,7 +94,6 @@ def get_vla_graph(vla_model_id, hardware, vla_config):
 
     control_hz = vla_config.get("control_hz")
     if control_hz not in (None, ""):
-        budget = 1.0 / float(control_hz)
-        payload["control"] = {"hz": float(control_hz), "budget": budget, "ok": total <= budget}
+        payload["control"] = control_budget(cfg, total, float(control_hz))
 
     return payload
