@@ -13,7 +13,7 @@ from get_model_graph import get_quant_bit
 
 # UI-overridable action-head fields (the rest of a preset is fixed).
 _INT_OVERRIDES = ("action_horizon", "tokens_per_action", "num_flow_steps", "action_chunk")
-_STR_OVERRIDES = ("expert_attention",)
+_STR_OVERRIDES = ("action_head", "expert_attention")
 _PHASE_META = ("mode", "steps", "chunk", "action_tokens", "expert_attention")
 
 

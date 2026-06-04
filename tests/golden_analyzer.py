@@ -159,17 +159,19 @@ CASES = [
         "params": {"num_text_tokens": 16, "batchsize": 1, "w_bit": 4, "a_bit": 8, "kv_bit": 8},
     },
     {
-        "name": "vla/tinyvla_flow_demo/orin_nx/w4a8kv8",  # flow/diffusion action head
-        "model_id": "tinyvla_flow_demo",
+        "name": "vla/tinyvla_demo+flow/orin_nx/w4a8kv8",  # flow head as a config override
+        "model_id": "tinyvla_demo",
         "hardware": "jetson_orin_nx_16gb",
         "kind": "vla",
+        "overrides": {"action_head": "flow"},
         "params": {"num_text_tokens": 16, "batchsize": 1, "w_bit": 4, "a_bit": 8, "kv_bit": 8},
     },
     {
-        "name": "vla/tinyvla_flow_linear_demo/orin_nx/w4a8kv8",  # linear-attention expert
-        "model_id": "tinyvla_flow_linear_demo",
+        "name": "vla/tinyvla_demo+flow+linear/orin_nx/w4a8kv8",  # flow + linear-attention expert
+        "model_id": "tinyvla_demo",
         "hardware": "jetson_orin_nx_16gb",
         "kind": "vla",
+        "overrides": {"action_head": "flow", "expert_attention": "linear"},
         "params": {"num_text_tokens": 16, "batchsize": 1, "w_bit": 4, "a_bit": 8, "kv_bit": 8},
     },
     # --- DiT-S/2 (local model_params source) -------------------------------
@@ -200,9 +202,13 @@ def flatten(obj, prefix=""):
 
 def run_case(case):
     if case["kind"] == "vla":
+        import dataclasses
         from vla import analyze_vla
         from model_params.vla_models import VLA_MODELS
-        return flatten(analyze_vla(VLA_MODELS[case["model_id"]], case["hardware"], **case["params"]))
+        cfg = VLA_MODELS[case["model_id"]]
+        if case.get("overrides"):  # action_head / expert_attention / etc. as config, not a variant preset
+            cfg = dataclasses.replace(cfg, **case["overrides"])
+        return flatten(analyze_vla(cfg, case["hardware"], **case["params"]))
     analyzer = ModelAnalyzer(
         case["model_id"], case["hardware"], case.get("config_file"), source=case["source"]
     )

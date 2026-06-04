@@ -1,7 +1,7 @@
 <script setup>
 // VLA viewer (edge robotics inference): a purpose-built phase dashboard.
 // Talks to the backend's /get_vla_avaliable and /get_vla_graph endpoints.
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import axios from 'axios'
 import { strNumber, strNumberTime } from '@/utils.js'
@@ -24,7 +24,8 @@ const cfg = reactive({
   w_quant: '4-bit', a_quant: '8-bit', kv_quant: '8-bit',
   num_text_tokens: 16, batch_size: 1, use_flashattention: false,
   control_hz: 10,
-  // action-head overrides (only the relevant ones are shown/sent)
+  // architecture choices (override the preset's defaults)
+  action_head: 'ar',                 // 'ar' | 'flow' | 'parallel'
   tokens_per_action: 7, action_horizon: 1,
   num_flow_steps: 10, action_chunk: 50, expert_attention: 'quadratic',
 })
@@ -35,10 +36,13 @@ const PHASE_COLORS = {
   llm_prefill: '#e67e22', action_generation: '#e74c3c',
 }
 
-const actionHead = computed(() => {
-  const m = vlaModels.value.find((x) => x.id === cfg.vla_model)
-  return m ? m.action_head : ''
-})
+// A model's preset action head is just the default; the user can override it.
+function presetHead(id) {
+  const m = vlaModels.value.find((x) => x.id === id)
+  return m ? m.action_head : 'ar'
+}
+// When the backbone changes, reset the action head to that model's default.
+watch(() => cfg.vla_model, (id) => { cfg.action_head = presetHead(id) })
 
 function gib(n) {
   return (n / (1024 ** 3)).toFixed(2) + ' GiB'
@@ -49,6 +53,7 @@ function fetchAvailable() {
     .then((r) => {
       vlaModels.value = r.data.vla_models
       hardwares.value = r.data.avaliable_hardwares
+      cfg.action_head = presetHead(cfg.vla_model)  // initialize from preset default
       fetchGraph()
     })
     .catch((e) => { errorMsg.value = 'Cannot reach backend at ' + ipPort.value })
@@ -61,6 +66,7 @@ function fetchGraph() {
     w_quant: cfg.w_quant, a_quant: cfg.a_quant, kv_quant: cfg.kv_quant,
     num_text_tokens: cfg.num_text_tokens, batch_size: cfg.batch_size,
     use_flashattention: cfg.use_flashattention, control_hz: cfg.control_hz,
+    action_head: cfg.action_head,
     tokens_per_action: cfg.tokens_per_action, action_horizon: cfg.action_horizon,
     num_flow_steps: cfg.num_flow_steps, action_chunk: cfg.action_chunk,
     expert_attention: cfg.expert_attention,
@@ -152,7 +158,7 @@ onMounted(fetchAvailable)
         <h3>Model</h3>
         <label>VLA model
           <select v-model="cfg.vla_model">
-            <option v-for="m in vlaModels" :key="m.id" :value="m.id">{{ m.id }} ({{ m.action_head }})</option>
+            <option v-for="m in vlaModels" :key="m.id" :value="m.id">{{ m.id }}</option>
           </select>
         </label>
         <label>Hardware
@@ -160,6 +166,29 @@ onMounted(fetchAvailable)
             <option v-for="h in hardwares" :key="h" :value="h">{{ h }}</option>
           </select>
         </label>
+
+        <h3>Architecture</h3>
+        <label>Action decoding
+          <select v-model="cfg.action_head">
+            <option value="ar">Autoregressive</option>
+            <option value="flow">Flow matching</option>
+            <option value="parallel">Parallel (1-step)</option>
+          </select>
+        </label>
+        <template v-if="cfg.action_head === 'ar'">
+          <label>Action horizon <input type="number" min="1" v-model.number.lazy="cfg.action_horizon" /></label>
+          <label>Tokens / action <input type="number" min="1" v-model.number.lazy="cfg.tokens_per_action" /></label>
+        </template>
+        <template v-else>
+          <label v-if="cfg.action_head === 'flow'">Denoising steps <input type="number" min="1" v-model.number.lazy="cfg.num_flow_steps" /></label>
+          <label>Action chunk <input type="number" min="1" v-model.number.lazy="cfg.action_chunk" /></label>
+          <label>Expert attention
+            <select v-model="cfg.expert_attention">
+              <option value="quadratic">quadratic</option>
+              <option value="linear">linear (SARA-RT)</option>
+            </select>
+          </label>
+        </template>
 
         <h3>Inference</h3>
         <label>Text prompt tokens <input type="number" min="0" v-model.number.lazy="cfg.num_text_tokens" /></label>
@@ -171,23 +200,6 @@ onMounted(fetchAvailable)
         <label>Weights <select v-model="cfg.w_quant"><option v-for="q in QUANTS" :key="q">{{ q }}</option></select></label>
         <label>Activations <select v-model="cfg.a_quant"><option v-for="q in QUANTS" :key="q">{{ q }}</option></select></label>
         <label>KV cache <select v-model="cfg.kv_quant"><option v-for="q in QUANTS" :key="q">{{ q }}</option></select></label>
-
-        <template v-if="actionHead === 'ar'">
-          <h3>Action head (AR)</h3>
-          <label>Action horizon <input type="number" min="1" v-model.number.lazy="cfg.action_horizon" /></label>
-          <label>Tokens / action <input type="number" min="1" v-model.number.lazy="cfg.tokens_per_action" /></label>
-        </template>
-        <template v-else-if="actionHead === 'flow'">
-          <h3>Action head (flow)</h3>
-          <label>Denoising steps <input type="number" min="1" v-model.number.lazy="cfg.num_flow_steps" /></label>
-          <label>Action chunk <input type="number" min="1" v-model.number.lazy="cfg.action_chunk" /></label>
-          <label>Expert attention
-            <select v-model="cfg.expert_attention">
-              <option value="quadratic">quadratic</option>
-              <option value="linear">linear (SARA-RT)</option>
-            </select>
-          </label>
-        </template>
       </div>
 
       <!-- dashboard -->

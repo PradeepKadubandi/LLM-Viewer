@@ -32,21 +32,12 @@ VLA_MODELS = {
         action_head="ar", action_horizon=1, tokens_per_action=7,
     ),
     # --- Flow / diffusion (pi0 / Octo-style) ------------------------------
-    # Runnable demo: CLIP-L vision + TinyLlama backbone + flow-matching expert.
-    "tinyvla_flow_demo": VLAConfig(
-        name="tinyvla_flow_demo",
-        vision_model_id="clip_vit_large_p14_336",
-        llm_model_id="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-        action_head="flow", num_flow_steps=10, action_chunk=50,
-    ),
-    # Same as tinyvla_flow_demo but with a SARA-RT-style linear-attention expert.
-    "tinyvla_flow_linear_demo": VLAConfig(
-        name="tinyvla_flow_linear_demo",
-        vision_model_id="clip_vit_large_p14_336",
-        llm_model_id="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-        action_head="flow", num_flow_steps=10, action_chunk=50,
-        expert_attention="linear",
-    ),
+    # NOTE: action head (ar/flow/parallel) and expert attention (quadratic/linear
+    # SARA-RT) are now UI/CLI config options, not separate presets -- a base
+    # model can be analyzed with any action decoder. The fields below are just
+    # the preset's default; switch the action head via vla_config instead of
+    # picking a different model. (tinyvla_demo above defaults to AR; override it
+    # with action_head="flow" for the flow/diffusion path on the same backbone.)
     # pi0 scale: SigLIP vision + PaliGemma backbone (gated) + ~300M flow expert.
     "pi0_like": VLAConfig(
         name="pi0_like",

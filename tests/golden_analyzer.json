@@ -4719,7 +4719,7 @@
     "total_results/prefill/store_act": 14487190016.0,
     "total_results/prefill/store_kv_cache": 46137344.0
   },
-  "vla/tinyvla_demo/orin_nx/w4a8kv8": {
+  "vla/tinyvla_demo+flow+linear/orin_nx/w4a8kv8": {
     "act_peak": 40115264.0,
     "config": "tinyvla_demo",
     "fits_in_memory": true,
@@ -4729,13 +4729,15 @@
     "kv_cache": 6679552.0,
     "memory_capacity": 17179869184,
     "num_image_tokens": 577,
-    "peak_memory": 683581504.0,
-    "phases/action_generation/OPs": 14791529536,
-    "phases/action_generation/action_tokens": 7,
-    "phases/action_generation/memory_access": 3688774656.0,
-    "phases/action_generation/mode": "ar",
-    "phases/action_generation/time": 0.03602319,
-    "phases/action_generation/weight": 0.0,
+    "peak_memory": 834576448.0,
+    "phases/action_generation/OPs": 306874368000.0,
+    "phases/action_generation/chunk": 50,
+    "phases/action_generation/expert_attention": "linear",
+    "phases/action_generation/memory_access": 1860157440.0,
+    "phases/action_generation/mode": "flow",
+    "phases/action_generation/steps": 10,
+    "phases/action_generation/time": 0.018165599999999997,
+    "phases/action_generation/weight": 150994944.0,
     "phases/llm_prefill/OPs": 1214256547264,
     "phases/llm_prefill/kv_cache": 6679552.0,
     "phases/llm_prefill/memory_access": 2305694208.0,
@@ -4754,12 +4756,12 @@
     "phases/vision_encoder/time": 0.014041061615039999,
     "phases/vision_encoder/weight": 150994944.0,
     "prefix_len": 593,
-    "total_time": 0.08648054643712,
-    "total_weight": 636786688.0
+    "total_time": 0.06862295643712,
+    "total_weight": 787781632.0
   },
-  "vla/tinyvla_flow_demo/orin_nx/w4a8kv8": {
+  "vla/tinyvla_demo+flow/orin_nx/w4a8kv8": {
     "act_peak": 40115264.0,
-    "config": "tinyvla_flow_demo",
+    "config": "tinyvla_demo",
     "fits_in_memory": true,
     "hardware": "jetson_orin_nx_16gb",
     "hardware_info/bandwidth": 102400000000.0,
@@ -4797,9 +4799,9 @@
     "total_time": 0.06876358143712001,
     "total_weight": 787781632.0
   },
-  "vla/tinyvla_flow_linear_demo/orin_nx/w4a8kv8": {
+  "vla/tinyvla_demo/orin_nx/w4a8kv8": {
     "act_peak": 40115264.0,
-    "config": "tinyvla_flow_linear_demo",
+    "config": "tinyvla_demo",
     "fits_in_memory": true,
     "hardware": "jetson_orin_nx_16gb",
     "hardware_info/bandwidth": 102400000000.0,
@@ -4807,15 +4809,13 @@
     "kv_cache": 6679552.0,
     "memory_capacity": 17179869184,
     "num_image_tokens": 577,
-    "peak_memory": 834576448.0,
-    "phases/action_generation/OPs": 306874368000.0,
-    "phases/action_generation/chunk": 50,
-    "phases/action_generation/expert_attention": "linear",
-    "phases/action_generation/memory_access": 1860157440.0,
-    "phases/action_generation/mode": "flow",
-    "phases/action_generation/steps": 10,
-    "phases/action_generation/time": 0.018165599999999997,
-    "phases/action_generation/weight": 150994944.0,
+    "peak_memory": 683581504.0,
+    "phases/action_generation/OPs": 14791529536,
+    "phases/action_generation/action_tokens": 7,
+    "phases/action_generation/memory_access": 3688774656.0,
+    "phases/action_generation/mode": "ar",
+    "phases/action_generation/time": 0.03602319,
+    "phases/action_generation/weight": 0.0,
     "phases/llm_prefill/OPs": 1214256547264,
     "phases/llm_prefill/kv_cache": 6679552.0,
     "phases/llm_prefill/memory_access": 2305694208.0,
@@ -4834,7 +4834,7 @@
     "phases/vision_encoder/time": 0.014041061615039999,
     "phases/vision_encoder/weight": 150994944.0,
     "prefix_len": 593,
-    "total_time": 0.06862295643712,
-    "total_weight": 787781632.0
+    "total_time": 0.08648054643712,
+    "total_weight": 636786688.0
   }
 }
