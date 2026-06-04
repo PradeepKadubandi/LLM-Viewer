@@ -4,7 +4,7 @@ from flask_cors import CORS
 from get_model_graph import get_model_graph
 from get_vla_graph import get_vla_graph
 from model_params.vla_models import VLA_MODELS
-from backend_settings import avaliable_hardwares,avaliable_model_ids
+from backend_settings import avaliable_hardwares,avaliable_model_ids,edge_hardwares
 import argparse
 
 app = Flask(__name__)
@@ -53,7 +53,7 @@ def get_vla_graph_route():
 def get_vla_avaliable():
     return {
         "vla_models": [{"id": k, "action_head": v.action_head} for k, v in VLA_MODELS.items()],
-        "avaliable_hardwares": avaliable_hardwares,
+        "avaliable_hardwares": edge_hardwares,
     }
 
 if __name__ == "__main__":
