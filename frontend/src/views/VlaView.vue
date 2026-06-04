@@ -142,7 +142,8 @@ onMounted(fetchAvailable)
       <span class="title">VLA Viewer <small>— edge robotics inference</small></span>
       <span class="spacer" />
       <label>Server <input v-model.lazy="ipPort" @change="fetchAvailable" class="server_in" /></label>
-      <RouterLink to="/" class="nav_link">LLM viewer →</RouterLink>
+      <RouterLink to="/llm" class="nav_link">LLM viewer</RouterLink>
+      <RouterLink to="/" class="nav_link">home</RouterLink>
     </div>
 
     <div class="vla_body">
