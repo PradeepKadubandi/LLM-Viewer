@@ -42,6 +42,18 @@ hardware_params = {
     # https://images.nvidia.com/aem-dam/Solutions/Data-Center/l4/nvidia-ada-gpu-architecture-whitepaper-v2.1.pdf
     # Ada SM has 256 KB Register File, and 128 KB of L1/Shared Memory
     "nvidia_L40": {"bandwidth": 864e9, "FP16": 181e12, "INT8": 362e12, "INT4": 724e12, "onchip_buffer": 36352e3, "memory_capacity": 48 * GiB, "category": "cloud"},
+    # GeForce RTX 4090 (Ada AD102, 128 SMs). Tensor-core dense figures from the
+    # Ada whitepaper (sparse/2): FP16 330.3, INT8 660.6, INT4 1321.2. 24GB
+    # GDDR6X at 1008 GB/s (384-bit, 21 Gbps). onchip = 128 * 256KB RF.
+    "nvidia_RTX4090": {"bandwidth": 1008e9, "FP16": 330.3e12, "INT8": 660.6e12, "INT4": 1321.2e12, "onchip_buffer": 32768e3, "memory_capacity": 24 * GiB, "category": "edge"},
+    # GeForce RTX 3090 (Ampere GA102, 82 SMs). Dense tensor figures (sparse/2),
+    # FP16 with FP16 accumulate: FP16 142, INT8 284, INT4 568. 24GB GDDR6X at
+    # 936 GB/s (384-bit, 19.5 Gbps). onchip = 82 * 256KB RF.
+    "nvidia_RTX3090": {"bandwidth": 936e9, "FP16": 142e12, "INT8": 284e12, "INT4": 568e12, "onchip_buffer": 20992e3, "memory_capacity": 24 * GiB, "category": "edge"},
+    # GeForce RTX 5090 (Blackwell GB202, 170 SMs). Dense tensor figures derived
+    # from the FP4 headline (sparse/2): FP16 419, INT8 838, INT4 1676. 32GB
+    # GDDR7 at 1792 GB/s (512-bit, 28 Gbps). onchip = 170 * 256KB RF.
+    "nvidia_RTX5090": {"bandwidth": 1792e9, "FP16": 419e12, "INT8": 838e12, "INT4": 1676e12, "onchip_buffer": 43520e3, "memory_capacity": 32 * GiB, "category": "edge"},
     # Intel Skylake-X (Skylake-X, Cascade Lake) Intel Xeon Phi (Knights Landing, Knights Mill) Intel Ice Lake, Tiger Lake and Rocket Lake
     # support AVX-512 & FMA (512-bit), they has throughput of 1 cycle
     # https://www.intel.com/content/www/us/en/products/sku/230496/intel-core-i913900k-processor-36m-cache-up-to-5-80-ghz/specifications.html
