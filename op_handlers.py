@@ -142,7 +142,7 @@ def fused_attention(ctx, q_seqlen, kv_seqlen):
     sv_matmul_OPs = q_seqlen * head_size * kv_seqlen * nah * bs * 2
     softmax_OPs = bs * nah * kv_seqlen * q_seqlen * 5
     q_numel = q_seqlen * head_size * bs * nah * a_byte
-    o_numel = q_seqlen * kv_seqlen * bs * nah * a_byte
+    o_numel = q_seqlen * head_size * bs * nah * a_byte
     return _result(
         OPs=qk_matmul_OPs + sv_matmul_OPs + softmax_OPs,
         load_weight=0,
