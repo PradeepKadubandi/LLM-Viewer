@@ -2,11 +2,9 @@
 
 Roofline analysis of **Vision-Language-Action (VLA)** models running inference on robotics **edge devices** (NVIDIA Jetson). Part of [**LLM-Viewer**](README.md) — it reuses the LLM roofline engine and op-cost model, and adds the VLA-specific pipeline, edge hardware, and a purpose-built dashboard. The two are kept as **separate products in one app**: `/llm` (cloud LLM serving) and `/vla` (edge robotics), with disjoint model and hardware lists.
 
-<video src="https://github.com/PradeepKadubandi/LLM-Viewer/raw/pk/vla-viewer/figs/vla_demo.mp4" poster="figs/vla_demo_poster.png" controls width="100%">
-  <a href="figs/vla_demo.mp4">▶ Watch the VLA Viewer demo (mp4)</a>
-</video>
+[![VLA Viewer demo](figs/vla_demo_poster.png)](figs/vla_demo.mp4)
 
-_If the inline player doesn't load, [watch the demo video](figs/vla_demo.mp4) (opens GitHub's player)._
+▶ **[Watch the demo video](figs/vla_demo.mp4)** (1:57) — click to play with controls.
 
 The VLA Viewer models one observe→act inference step as a pipeline of phases —
 **patch embed → vision encode → projector → LLM prefill → action generation** —
